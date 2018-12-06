@@ -36,7 +36,9 @@ float dq[3]={0.0,0.0,0.0}; // Error-State vector
 float P[9] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};  // Covariance square matrix. Order, from top to bottom, left to right.
 float gyro_noise, accel_noise;
 uint32_t t_last = micros();
-
+    
+uint8_t loop_counter = 0;
+    
 void setup() 
 {
     Serial.begin(115200);
@@ -53,7 +55,7 @@ void setup()
     
     calibrate();
 
-    delay(5000);
+    delay(1000);
     
     // Gyro std. dev: ("Rate noise density")*sqrt("Sampling Rate"/2) [rad/s];
     float gyro_stdDev =  sqrtf(1660/2)*GYRO_NOISE_DEN; // [mdeg/s]
@@ -64,7 +66,7 @@ void setup()
     
     float accel_stdDev =  sqrtf(1660/2)*ACCEL_NOISE_DEN; // [ug/s]
     accel_stdDev = accel_stdDev/1000000; // [g/s]
-    // accel_stdDev = 0.0283;
+    accel_stdDev = 0.10283;
     accel_noise = accel_stdDev*accel_stdDev;
     
     // Initialize Covariance
@@ -86,14 +88,46 @@ void setup()
     dq[0] = 0.0;
     dq[1] = 0.0;
     dq[2] = 0.0;
+
+    Serial.println("Gyro Noise");
+    Serial.println(gyro_noise,10);
+    Serial.println("Accel Noise");
+    Serial.println(accel_noise,10);
 }
 
 void loop() 
 {
+  float Fq[16];
+  float Fdq[9];
+  float Q[9];
+  float Hdq[9];
+  float Na[9] = {0.0};  
+  float Z[9];  
+  float Zinv[9];  
+  float K[9];
+  float Hdq_tr[9];  
+  float R[9];  
+  float R_tr[9];  
+  float acc_est[3];  
+  float z[3];  
+  float aux[9];  
+  float I3[9] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+  float S[9];
+  float qL[16];
+  float dq_aux[4] = {1.0};
+  float G[9];  
+  float euler[3];
+
+  
+if (loop_counter <=255)
+{
+  ++loop_counter;
   if (lsm6dsm.checkNewData()) 
   {  
-    // float ax=9.2353, ay=-0.10040, az=-4.1372, gx=-0.2342, gy=0.3173, gz=-0.1532;
-    float ax=9.2353, ay=-0.10040, az=-4.1372, gx=-0.2342, gy=0.3173, gz=-0.1532;
+    Serial.print("LOOP COUNTER:   ");
+    Serial.println(loop_counter);
+        
+    float ax=0.0, ay=0.0, az=0.0, gx=0.0, gy=0.0, gz=0.0;
     float gravity[3] = {0.0, 0.0, 9.80665};
     
     // acc [g], gyro [deg/s]
@@ -106,92 +140,89 @@ void loop()
     ay = ay*gravity[2];
     az = az*gravity[2];
 
-    /*Serial.print(gx);
-    Serial.print(",");
-    Serial.print(gy);
-    Serial.print(",");
-    Serial.println(gz);*/
-    
+    float gyro_m[3] = {gx, gy, gz};
+    float acc_m[3] = {ax, ay, az};
+
+    printVector3("Gyrometer measure", gyro_m);
+    printVector3("Accel measure", acc_m);
+            
     uint32_t t_delta = micros() - t_last;
     t_last = micros();
     
     float t_deltaf = t_delta / 1000000.0;
+    Serial.println("Delta time:");
+    Serial.println(t_deltaf, 12);
         
     // Update state estimation
-    float Fq[16];
     computeFq(&gx, &gy, &gz, t_deltaf, Fq);
     matrixByVector4(Fq,q,q);
-    normalizeVector4(4,q,q);
+    normalizeVector4(q,q);
 
-        Serial.print("Quaternion");
-    Serial.print(",");
-    Serial.print(q[0]);
-    Serial.print(",");
-    Serial.print(q[1]);
-    Serial.print(",");
-    Serial.println(q[2]);
-    
-    // ^ Checked ^
+    // printMatrix4("Jacobian Fq:", Fq);
+    // printVector4("Quaternion estimation update:", q);
   
     // Update error-state estimation
-    float Fdq[9];
-    float Q[9];
     computeFdq(&gx, &gy, &gz, t_deltaf, Fdq);
     computeQ(t_deltaf, Q);
-    matrixByVector3(Fdq,dq, dq);    
+    matrixByVector3(Fdq,dq, dq);
     propagateCovariance(P,Fdq,P);
     addMatrices(3,3,P,Q,P);
 
-    // ^ Checked ^ (Q, P, Fdq, dq)
+    // printMatrix3("Jacobian Fdq", Fdq);
+    // printMatrix3("Covariance P", P);
+    // printMatrix3("Noise matrix Q", Q);
+    // printVector3("Error state dq", dq);      
     
     // Correction
-    float Hdq[9];
-    computeHdq(q,Hdq); 
-    float Na[9] = {0.0};
+    computeHdq(q,Hdq);  
     computeNa(Na);
-    float Z[9];
     propagateCovariance(P,Hdq,Z);
     addMatrices(3,3,Z,Na,Z);
-    float Zinv[9];
     inverseMatrix3(Z, Zinv);
-    float K[9];
-    float Hdq_tr[9];
     transpose3(Hdq, Hdq_tr);
     matrixByMatrix(3,P,Hdq_tr,K);
     matrixByMatrix(3,K,Zinv,K);
 
-
-    
-    float R[9];
+    //printMatrix3("Jacobian Hdq", Hdq);
+    //printMatrix3("Matrix Z", Z);
+    //printMatrix3("Gain K", K);
+    //printMatrix3("Noise Na", Na);
+        
     fromqtoR(q,R);
-    float R_tr[9];
     transpose3(R,R_tr);
-    float acc_est[3];
-
     matrixByVector3(R_tr,gravity,acc_est);
-    normalizeVector3(3,acc_est, acc_est);
-    float z[3];
-    z[0] = ax - acc_est[0];
-    z[1] = ay - acc_est[1];
-    z[2] = az - acc_est[2];
+    normalizeVector3(acc_est, acc_est);
+    normalizeVector3(acc_m, acc_m);
+    z[0] = acc_m[0] - acc_est[0];
+    z[1] = acc_m[1] - acc_est[1];
+    z[2] = acc_m[2] - acc_est[2];
     matrixByVector3(K,z,dq);
-    float aux[9];
+    
+    //printVector3("Estimated acceler:", acc_est);
+    //printVector3("Error vector z", z);
+    //printVector3("Updated error state dq", dq);
+    
     matrixByMatrix(3, K, Hdq, aux);
-    float I3[9] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
-    float S[9];
     subtractMatrices(3, 3, I3, aux, S);
     propagateCovariance(P,S,P);
     propagateCovariance(Z,K, aux);
     addMatrices(3,3,P,aux,P);
-    float qL[16];
+
+    //printMatrix3("S matrix", S);
+    //printMatrix3("Covariance P", P);
+    
     leftQuaternion(q, qL);
-    float dq_aux[4] = {1.0, dq[0]*0.5, dq[1]*0.5, dq[2]*0.5};
+    dq_aux [0] = 1.0;
+    dq_aux [1] = dq[0]*0.5; 
+    dq_aux [2] = dq[1]*0.5; 
+    dq_aux [3] = dq[2]*0.5;
+    
     matrixByVector4(qL, dq_aux, q);
     dq[0] = 0.5*dq[0];
     dq[1] = 0.5*dq[1];
     dq[2] = 0.5*dq[2];
     skew(dq, aux);
-    float G[9];
+    
     subtractMatrices(3,3,I3, aux, G);
     propagateCovariance(P,G,P);    
     
@@ -199,10 +230,14 @@ void loop()
     dq[1] = 0.0;
     dq[2] = 0.0;
 
-    float euler[3];
+    //printMatrix3("Last Covariance P", P);
+    printVector4("Quaternion Last", q);
+    
     computeEulerAngles(q,euler);
   }
 }
+}
+
 
 void calibrate()
 {
@@ -391,52 +426,28 @@ void computeEulerAngles(float q[4], float euler[3])
 void matrixByVector3(float mat[9], float vec[3], float res[3])
 {
   float res_t[3];
-  for (int ii = 0; ii < 3; ++ii)
-  {
-    for (int jj = 0; jj < 3; ++jj)
-    {
-      res_t[ii] += mat[ii+3*jj]*vec[jj];
-    }
-  }
-
+  res_t[0] = mat[0]*vec[0] + mat[3]*vec[1] + mat[6]*vec[2];
+  res_t[1] = mat[1]*vec[0] + mat[4]*vec[1] + mat[7]*vec[2];
+  res_t[2] = mat[2]*vec[0] + mat[5]*vec[1] + mat[8]*vec[2];
+  
   for (int jj = 0; jj < 3; ++jj)
   {
     res[jj] = res_t[jj];
   }
 }
 
-void matrixByVector4(float mat[16], float vec[4], float res[4])
+void matrixByVector4(const float mat[16], float vec[4], float res[4])
 {
+    
   float res_t[4];
-  for (int ii = 0; ii < 4; ++ii)
-  {
-    for (int jj = 0; jj < 4; ++jj)
-    {
-      res_t[ii] += mat[ii+4*jj]*vec[jj];
-    }
-  }
+  res_t[0] = mat[0]*vec[0] + mat[4]*vec[1] + mat[8]*vec[2]  + mat[12]*vec[3];
+  res_t[1] = mat[1]*vec[0] + mat[5]*vec[1] + mat[9]*vec[2]  + mat[13]*vec[3];
+  res_t[2] = mat[2]*vec[0] + mat[6]*vec[1] + mat[10]*vec[2] + mat[14]*vec[3];
+  res_t[3] = mat[3]*vec[0] + mat[7]*vec[1] + mat[11]*vec[2] + mat[15]*vec[3];
 
   for (int jj = 0; jj < 4; ++jj)
   {
-    res[jj] = res_t[jj];
-  }
-}
-
-
-void matrixByVector(uint8_t nrow, uint8_t ncol, float *mat, float *vec, float *res)
-{
-  float res_t[ncol];
-  for (int ii = 0; ii < nrow; ++ii)
-  {
-    for (int jj = 0; jj < ncol; ++jj)
-    {
-      res_t[ii] += mat[ii+nrow*jj]*vec[jj];
-    }
-  }
-
-  for (int jj = 0; jj < ncol; ++jj)
-  {
-    res[jj] = res_t[jj];
+    res[jj] = res_t[jj];  
   }
 }
 
@@ -462,50 +473,53 @@ void matrixByMatrix(uint8_t dim, float matA[9], float matB[9], float res[9])
 }
 
 
-void normalizeVector3(int nele, float vec[3], float res[3])
+void normalizeVector3(float vec[3], float res[3])
 {
   float norm;
-  for (int ii=0; ii<nele; ++ii)
-  {
-    norm += vec[ii]*vec[ii];
-  }
-  
-  for (int ii=0; ii<nele; ++ii)
-  {
-    res[ii] = vec [ii]/sqrtf(norm);
-  }
-  
+  norm = sqrtf(vec[0]*vec[0] + vec[1]*vec[1] + vec[2]*vec[2]);
+
+  res[0] = vec[0]/norm;
+  res[1] = vec[1]/norm;
+  res[2] = vec[2]/norm;
+    
 }
 
-void normalizeVector4(int nele, float vec[4], float res[4])
+void normalizeVector4(float vec[4], float res[4])
 {
   float norm;
-  for (int ii=0; ii<nele; ++ii)
-  {
-    norm += vec[ii]*vec[ii];
-  }
+  norm = sqrtf(vec[0]*vec[0] + vec[1]*vec[1] + vec[2]*vec[2] + vec[3]*vec[3]);
   
-  for (int ii=0; ii<nele; ++ii)
-  {
-    res[ii] = vec [ii]/sqrtf(norm);
-  }
-  
+  res[0] = vec[0]/norm;
+  res[1] = vec[1]/norm;
+  res[2] = vec[2]/norm;
+  res[3] = vec[3]/norm;
 }
 
 
 void addMatrices(uint8_t nrow, uint8_t ncol, float matA[9], float matB[9], float res[9])
 {
+  float res_t[nrow*ncol];
   for (int ii = 0; ii < nrow*ncol; ++ii)
   {
-    res[ii] = matA[ii] + matB[ii];
+    res_t[ii] = matA[ii] + matB[ii];
+  }
+
+  for (int ii = 0; ii < nrow*ncol; ++ii)
+  {
+    res[ii] = res_t[ii];
   }
 }
 
 void subtractMatrices(uint8_t nrow, uint8_t ncol, float matA[9], float matB[9], float res[9])
 {
+  float res_t[nrow*ncol];
   for (int ii = 0; ii < nrow*ncol; ++ii)
   {
-    res[ii] = matA[ii] - matB[ii];
+    res_t[ii] = matA[ii] - matB[ii];
+  }
+  for (int ii = 0; ii < nrow*ncol; ++ii)
+  {
+    res[ii] = res_t[ii];
   }
 }
 
@@ -539,4 +553,93 @@ void transpose3(float mat[9], float res[9])
   res[7] = mat[5];
   res[8] = mat[8];
 }
+
+void printVector3(const char title[50], float vec[3])
+{
+  Serial.println(title);
+  Serial.print("[ ");
+  Serial.print(vec[0],12);
+  Serial.print("  ");
+  Serial.print(vec[1],12);
+  Serial.print("  ");
+  Serial.print(vec[2],12);  
+  Serial.println(" ]'");
+}
+
+void printVector4(const char title[50], float vec[4])
+{
+  Serial.println(title);
+  Serial.print("[ ");
+  Serial.print(vec[0],12);
+  Serial.print("  ");
+  Serial.print(vec[1],12);
+  Serial.print("  ");
+  Serial.print(vec[2],12);
+  Serial.print("  ");
+  Serial.print(vec[3],12);    
+  Serial.println(" ]'");
+}
+
+void printMatrix3(const char title[50], float mat[9])
+{
+  Serial.println(title);
+  Serial.print("[[ ");
+  Serial.print(mat[0],12);
+  Serial.print("  ");
+  Serial.print(mat[3],12);
+  Serial.print("  ");
+  Serial.print(mat[6],12);
+  Serial.print("];[");
+  Serial.print(mat[1],12);
+  Serial.print("  ");
+  Serial.print(mat[4],12);
+  Serial.print("  ");
+  Serial.print(mat[7],12);
+  Serial.print("];[");
+  Serial.print(mat[2],12);
+  Serial.print("  ");
+  Serial.print(mat[5],12);
+  Serial.print("  ");
+  Serial.print(mat[8],12);    
+  Serial.println(" ]]");
+}
+
+void printMatrix4(const char title[50], float mat[16])
+{
+  Serial.println(title);
+  Serial.print("[[ ");
+  Serial.print(mat[0],12);
+  Serial.print("  ");
+  Serial.print(mat[4],12);
+  Serial.print("  ");
+  Serial.print(mat[8],12);
+  Serial.print("  ");
+  Serial.print(mat[12],12);
+  Serial.print("];[");
+  Serial.print(mat[1],12);
+  Serial.print("  ");
+  Serial.print(mat[5],12);
+  Serial.print("  ");
+  Serial.print(mat[9],12);
+  Serial.print("  ");
+  Serial.print(mat[13],12);
+  Serial.print("];[");
+  Serial.print(mat[2],12);
+  Serial.print("  ");
+  Serial.print(mat[6],12);
+  Serial.print("  ");
+  Serial.print(mat[10],12);
+  Serial.print("  ");
+  Serial.print(mat[14],12);
+  Serial.print("];[");
+  Serial.print(mat[3],12);
+  Serial.print("  ");
+  Serial.print(mat[7],12);
+  Serial.print("  ");
+  Serial.print(mat[11],12);
+  Serial.print("  ");
+  Serial.print(mat[15],12);      
+  Serial.println(" ]]");
+}
+
 
