@@ -37,7 +37,7 @@ float P[9] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};  // Covariance square matrix
 float gyro_noise, accel_noise;
 uint32_t t_last = micros();
     
-uint8_t loop_counter = 0;
+uint16_t loop_counter = 0;
     
 void setup() 
 {
@@ -140,6 +140,13 @@ if (loop_counter <=255)
     ay = ay*gravity[2];
     az = az*gravity[2];
 
+    ax = int(ax*10000)/10000.0  ;
+    ay = int(ay*10000)/10000.0  ;
+    az = int(az*10000)/10000.0  ;
+    gx = int(gx*10000)/10000.0  ;
+    gy = int(gy*10000)/10000.0  ;
+    gz = int(gz*10000)/10000.0  ;
+    
     float gyro_m[3] = {gx, gy, gz};
     float acc_m[3] = {ax, ay, az};
 
@@ -158,8 +165,8 @@ if (loop_counter <=255)
     matrixByVector4(Fq,q,q);
     normalizeVector4(q,q);
 
-    // printMatrix4("Jacobian Fq:", Fq);
-    // printVector4("Quaternion estimation update:", q);
+    printMatrix4("Jacobian Fq:", Fq);
+    printVector4("Quaternion estimation update:", q);
   
     // Update error-state estimation
     computeFdq(&gx, &gy, &gz, t_deltaf, Fdq);
@@ -168,10 +175,10 @@ if (loop_counter <=255)
     propagateCovariance(P,Fdq,P);
     addMatrices(3,3,P,Q,P);
 
-    // printMatrix3("Jacobian Fdq", Fdq);
-    // printMatrix3("Covariance P", P);
-    // printMatrix3("Noise matrix Q", Q);
-    // printVector3("Error state dq", dq);      
+    printMatrix3("Jacobian Fdq", Fdq);
+    printMatrix3("Covariance P", P);
+    printMatrix3("Noise matrix Q", Q);
+    printVector3("Error state dq", dq);      
     
     // Correction
     computeHdq(q,Hdq);  
@@ -183,10 +190,10 @@ if (loop_counter <=255)
     matrixByMatrix(3,P,Hdq_tr,K);
     matrixByMatrix(3,K,Zinv,K);
 
-    //printMatrix3("Jacobian Hdq", Hdq);
-    //printMatrix3("Matrix Z", Z);
-    //printMatrix3("Gain K", K);
-    //printMatrix3("Noise Na", Na);
+    printMatrix3("Jacobian Hdq", Hdq);
+    printMatrix3("Matrix Z", Z);
+    printMatrix3("Gain K", K);
+    printMatrix3("Noise Na", Na);
         
     fromqtoR(q,R);
     transpose3(R,R_tr);
@@ -198,9 +205,9 @@ if (loop_counter <=255)
     z[2] = acc_m[2] - acc_est[2];
     matrixByVector3(K,z,dq);
     
-    //printVector3("Estimated acceler:", acc_est);
-    //printVector3("Error vector z", z);
-    //printVector3("Updated error state dq", dq);
+    printVector3("Estimated acceler:", acc_est);
+    printVector3("Error vector z", z);
+    printVector3("Updated error state dq", dq);
     
     matrixByMatrix(3, K, Hdq, aux);
     subtractMatrices(3, 3, I3, aux, S);
@@ -208,8 +215,8 @@ if (loop_counter <=255)
     propagateCovariance(Z,K, aux);
     addMatrices(3,3,P,aux,P);
 
-    //printMatrix3("S matrix", S);
-    //printMatrix3("Covariance P", P);
+    printMatrix3("S matrix", S);
+    printMatrix3("Covariance P", P);
     
     leftQuaternion(q, qL);
     dq_aux [0] = 1.0;
@@ -230,7 +237,7 @@ if (loop_counter <=255)
     dq[1] = 0.0;
     dq[2] = 0.0;
 
-    //printMatrix3("Last Covariance P", P);
+    printMatrix3("Last Covariance P", P);
     printVector4("Quaternion Last", q);
     
     computeEulerAngles(q,euler);
@@ -584,23 +591,23 @@ void printMatrix3(const char title[50], float mat[9])
 {
   Serial.println(title);
   Serial.print("[[ ");
-  Serial.print(mat[0],12);
+  Serial.print(mat[0],32);
   Serial.print("  ");
-  Serial.print(mat[3],12);
+  Serial.print(mat[3],32);
   Serial.print("  ");
-  Serial.print(mat[6],12);
+  Serial.print(mat[6],32);
   Serial.print("];[");
-  Serial.print(mat[1],12);
+  Serial.print(mat[1],32);
   Serial.print("  ");
-  Serial.print(mat[4],12);
+  Serial.print(mat[4],32);
   Serial.print("  ");
-  Serial.print(mat[7],12);
+  Serial.print(mat[7],32);
   Serial.print("];[");
-  Serial.print(mat[2],12);
+  Serial.print(mat[2],32);
   Serial.print("  ");
-  Serial.print(mat[5],12);
+  Serial.print(mat[5],32);
   Serial.print("  ");
-  Serial.print(mat[8],12);    
+  Serial.print(mat[8],32);    
   Serial.println(" ]]");
 }
 
