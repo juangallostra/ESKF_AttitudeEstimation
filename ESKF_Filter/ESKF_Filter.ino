@@ -18,25 +18,23 @@ static LSM6DSM::Rate_t AODR = LSM6DSM::ODR_1660Hz;
 static LSM6DSM::Rate_t GODR = LSM6DSM::ODR_1660Hz;
 
 // Gyro and accel parameters
-static float GYRO_NOISE_DEN  = 3.8; // [mdps/sqrt(Hz)]
-static float ACCEL_NOISE_DEN = 80;  // [ug/sqrt(Hz)] (Different value depending on the FS)
+static float GYRO_NOISE_DEN  = 3.8f; // [mdps/sqrt(Hz)]
+static float ACCEL_NOISE_DEN = 80.0f;  // [ug/sqrt(Hz)] (Different value depending on the FS)
 
 // Random Bias to initiate the object
-float ACCEL_BIAS[3] = {0.0, 0.0, 0.0};
-float GYRO_BIAS[3]  = {0.0, 0.0, 0.0};
+float ACCEL_BIAS[3] = {0.0f, 0.0f, 0.0f};
+float GYRO_BIAS[3]  = {0.0f, 0.0f, 0.0f};
 
 static LSM6DSM lsm6dsm(Ascale, Gscale, AODR, GODR, ACCEL_BIAS, GYRO_BIAS);
 
 //Declaring filter variables
 // States
-float q[4] = {1.0,0.0,0.0,0.0};  // Quaternion initialization
-
-// Declare Filter Varialbes
-float dq[3]={0.0,0.0,0.0}; // Error-State vector
-float P[9] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};  // Covariance square matrix. Order, from top to bottom, left to right.
+float q_[4] = {1.0f,0.0f,0.0f,0.0f};  // Quaternion initialization
+float dq_[3] = {0.0f,0.0f,0.0f}; // Error-State vector
+float P_[9] = {0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f};  // Covariance square matrix. Order, from top to bottom, left to right.
 float gyro_noise, accel_noise;
 uint32_t t_last = micros();
-    
+
 uint16_t loop_counter = 0;
     
 void setup() 
@@ -70,65 +68,70 @@ void setup()
     accel_noise = accel_stdDev*accel_stdDev;
     
     // Initialize Covariance
-    P[0] = 0.0000000001;
-    P[1] = 0.0;
-    P[2] = 0.0;
-    P[3] = 0.0;
-    P[4] = 0.0000000001;
-    P[5] = 0.0;
-    P[6] = 0.0;
-    P[7] = 0.0;
-    P[8] = 0.0000000001;
+    P_[0] = 0.0000000001f;
+    P_[1] = 0.0f;
+    P_[2] = 0.0f;
+    P_[3] = 0.0f;
+    P_[4] = 0.0000000001f;
+    P_[5] = 0.0f;
+    P_[6] = 0.0f;
+    P_[7] = 0.0f;
+    P_[8] = 0.0000000001f;
 
-    q[0] = 1.0;
-    q[1] = 0.0;
-    q[2] = 0.0;
-    q[3] = 0.0;
+    q_[0] = 1.0f;
+    q_[1] = 0.0f;
+    q_[2] = 0.0f;
+    q_[3] = 0.0f;
 
-    dq[0] = 0.0;
-    dq[1] = 0.0;
-    dq[2] = 0.0;
+    dq_[0] = 0.0;
+    dq_[1] = 0.0;
+    dq_[2] = 0.0;
 
-    Serial.println("Gyro Noise");
+   /* Serial.println("Gyro Noise");
     Serial.println(gyro_noise,10);
     Serial.println("Accel Noise");
-    Serial.println(accel_noise,10);
+    Serial.println(accel_noise,10);*/
 }
 
 void loop() 
 {
-  float Fq[16];
-  float Fdq[9];
-  float Q[9];
-  float Hdq[9];
-  float Na[9] = {0.0};  
-  float Z[9];  
-  float Zinv[9];  
-  float K[9];
-  float Hdq_tr[9];  
-  float R[9];  
-  float R_tr[9];  
-  float acc_est[3];  
-  float z[3];  
-  float aux[9];  
-  float I3[9] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
-  float S[9];
-  float qL[16];
-  float dq_aux[4] = {1.0};
-  float G[9];  
-  float euler[3];
+  float Fq[16] = {0.0f};
+  float Fdq[9] = {0.0f};
+  float Q[9]   = {0.0f};
+  float Hdq[9] = {0.0f};
+  float Na[9]  = {0.0f};  
+  float Z[9]   = {0.0f};  
+  float Zinv[9]= {0.0f};  
+  float K[9] = {0.0f};
+  float Hdq_tr[9]= {0.0f};  
+  float R[9]= {0.0f};  
+  float R_tr[9]= {0.0f};  
+  float acc_est[3]= {0.0f};  
+  float z[3]= {0.0f};  
+  float aux[9]= {0.0f};  
+  float I3[9] = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+  float S[9]= {0.0f};
+  float qL[16]= {0.0f};
+  float dq_aux[4] = {1.0f};
+  float G[9]= {0.0f};  
+  float euler[3]= {0.0f};
 
   
-if (loop_counter <=255)
-{
-  ++loop_counter;
+//if (loop_counter <=255)
+//{
+  //++loop_counter;
+  //printMatrix3("K at the beggining",K);
   if (lsm6dsm.checkNewData()) 
   {  
+    /*Serial.println(" ");
+    Serial.println(" ");
+    Serial.println(" ");
+    Serial.println(" ");
     Serial.print("LOOP COUNTER:   ");
-    Serial.println(loop_counter);
+    Serial.println(loop_counter);*/
         
-    float ax=0.0, ay=0.0, az=0.0, gx=0.0, gy=0.0, gz=0.0;
-    float gravity[3] = {0.0, 0.0, 9.80665};
+    float ax=0.0f, ay=0.0f, az=0.0f, gx=0.0f, gy=0.0f, gz=0.0f;
+    float gravity[3] = {0.0f, 0.0f, 9.80665f};
     
     // acc [g], gyro [deg/s]
     lsm6dsm.readData(ax, ay, az, gx, gy, gz);
@@ -150,52 +153,53 @@ if (loop_counter <=255)
     float gyro_m[3] = {gx, gy, gz};
     float acc_m[3] = {ax, ay, az};
 
-    printVector3("Gyrometer measure", gyro_m);
-    printVector3("Accel measure", acc_m);
+    //printVector3("Gyrometer measure", gyro_m);
+   // printVector3("Accel measure", acc_m);
             
     uint32_t t_delta = micros() - t_last;
     t_last = micros();
     
     float t_deltaf = t_delta / 1000000.0;
-    Serial.println("Delta time:");
-    Serial.println(t_deltaf, 12);
+    /*Serial.println("Delta time:");
+    Serial.println(t_deltaf, 12);*/
         
     // Update state estimation
     computeFq(&gx, &gy, &gz, t_deltaf, Fq);
-    matrixByVector4(Fq,q,q);
-    normalizeVector4(q,q);
+    matrixByVector4(Fq,q_,q_);
+    normalizeVector4(q_,q_);
 
-    printMatrix4("Jacobian Fq:", Fq);
-    printVector4("Quaternion estimation update:", q);
+   // printMatrix4("Jacobian Fq:", Fq);
+    //printVector4("Quaternion estimation update:", q_);
   
     // Update error-state estimation
     computeFdq(&gx, &gy, &gz, t_deltaf, Fdq);
     computeQ(t_deltaf, Q);
-    matrixByVector3(Fdq,dq, dq);
-    propagateCovariance(P,Fdq,P);
-    addMatrices(3,3,P,Q,P);
+    matrixByVector3(Fdq,dq_, dq_);
+    propagateCovariance(P_,Fdq,P_);
+    addMatrices(3,3,P_,Q,P_);
 
-    printMatrix3("Jacobian Fdq", Fdq);
-    printMatrix3("Covariance P", P);
-    printMatrix3("Noise matrix Q", Q);
-    printVector3("Error state dq", dq);      
+    //printMatrix3("Jacobian Fdq", Fdq);
+    //printMatrix3("Covariance P", P_);
+    ///printMatrix3("Noise matrix Q", Q);
+    //printVector3("Error state dq", dq_);      
     
     // Correction
-    computeHdq(q,Hdq);  
+    computeHdq(q_,Hdq);  
     computeNa(Na);
-    propagateCovariance(P,Hdq,Z);
+    propagateCovariance(P_,Hdq,Z);
     addMatrices(3,3,Z,Na,Z);
     inverseMatrix3(Z, Zinv);
     transpose3(Hdq, Hdq_tr);
-    matrixByMatrix(3,P,Hdq_tr,K);
+    matrixByMatrix(3,P_,Hdq_tr,K);
     matrixByMatrix(3,K,Zinv,K);
-
-    printMatrix3("Jacobian Hdq", Hdq);
+      
+    /*printMatrix3("Jacobian Hdq", Hdq);
     printMatrix3("Matrix Z", Z);
+    printMatrix3("Matrix Zinv", Zinv);
     printMatrix3("Gain K", K);
-    printMatrix3("Noise Na", Na);
+    printMatrix3("Noise Na", Na);*/
         
-    fromqtoR(q,R);
+    fromqtoR(q_,R);
     transpose3(R,R_tr);
     matrixByVector3(R_tr,gravity,acc_est);
     normalizeVector3(acc_est, acc_est);
@@ -203,48 +207,75 @@ if (loop_counter <=255)
     z[0] = acc_m[0] - acc_est[0];
     z[1] = acc_m[1] - acc_est[1];
     z[2] = acc_m[2] - acc_est[2];
-    matrixByVector3(K,z,dq);
+    matrixByVector3(K,z,dq_);
     
-    printVector3("Estimated acceler:", acc_est);
+    /*printVector3("Estimated acceler:", acc_est);
     printVector3("Error vector z", z);
-    printVector3("Updated error state dq", dq);
+    printVector3("Updated error state dq", dq_);*/
     
     matrixByMatrix(3, K, Hdq, aux);
     subtractMatrices(3, 3, I3, aux, S);
-    propagateCovariance(P,S,P);
+    propagateCovariance(P_,S,P_);
     propagateCovariance(Z,K, aux);
-    addMatrices(3,3,P,aux,P);
+    addMatrices(3,3,P_,aux,P_);
 
-    printMatrix3("S matrix", S);
-    printMatrix3("Covariance P", P);
+    //printMatrix3("S matrix", S);
+    //printMatrix3("Covariance P", P_);
     
-    leftQuaternion(q, qL);
+    leftQuaternion(q_, qL);
     dq_aux [0] = 1.0;
-    dq_aux [1] = dq[0]*0.5; 
-    dq_aux [2] = dq[1]*0.5; 
-    dq_aux [3] = dq[2]*0.5;
+    dq_aux [1] = dq_[0]*0.5; 
+    dq_aux [2] = dq_[1]*0.5; 
+    dq_aux [3] = dq_[2]*0.5;
     
-    matrixByVector4(qL, dq_aux, q);
-    dq[0] = 0.5*dq[0];
-    dq[1] = 0.5*dq[1];
-    dq[2] = 0.5*dq[2];
-    skew(dq, aux);
+    matrixByVector4(qL, dq_aux, q_);
+    dq_[0] = 0.5*dq_[0];
+    dq_[1] = 0.5*dq_[1];
+    dq_[2] = 0.5*dq_[2];
+    skew(dq_, aux);
     
     subtractMatrices(3,3,I3, aux, G);
-    propagateCovariance(P,G,P);    
+    propagateCovariance(P_,G,P_);    
     
-    dq[0] = 0.0;
-    dq[1] = 0.0;
-    dq[2] = 0.0;
+    dq_[0] = 0.0;
+    dq_[1] = 0.0;
+    dq_[2] = 0.0;
 
-    printMatrix3("Last Covariance P", P);
-    printVector4("Quaternion Last", q);
+    truncateNumbers();
     
-    computeEulerAngles(q,euler);
+    //printMatrix3("Last Covariance P", P_);
+    //printVector4("Quaternion Last", q_);
+    
+    computeEulerAngles(q_,euler);
+    Serial.print(q_[0]);
+    Serial.print(",");
+    Serial.print(q_[1]);
+    Serial.print(",");
+    Serial.print(q_[2]);
+    Serial.print(",");
+    Serial.println(q_[3]);
   }
-}
+//}
 }
 
+void truncateNumbers()
+{
+  P_[0] = int(P_[0]*1000000000000)/1000000000000.0;
+  P_[1] = int(P_[1]*1000000000000)/1000000000000.0;
+  P_[2] = int(P_[2]*1000000000000)/1000000000000.0;
+  P_[3] = int(P_[3]*1000000000000)/1000000000000.0;
+  P_[4] = int(P_[4]*1000000000000)/1000000000000.0;
+  P_[5] = int(P_[5]*1000000000000)/1000000000000.0;
+  P_[6] = int(P_[6]*1000000000000)/1000000000000.0;
+  P_[7] = int(P_[7]*1000000000000)/1000000000000.0;
+  P_[8] = int(P_[8]*1000000000000)/1000000000000.0;
+  
+  /*q_[0] = int(q_[0]*100000)/100000.0;
+  q_[1] = int(q_[1]*100000)/100000.0;
+  q_[2] = int(q_[2]*100000)/100000.0;
+  q_[3] = int(q_[3]*100000)/100000.0;*/
+  
+}
 
 void calibrate()
 {
